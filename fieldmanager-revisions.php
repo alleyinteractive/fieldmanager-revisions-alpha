@@ -1,10 +1,10 @@
 <?php
 
 /*
-	Plugin Name: Fieldmanager Revisions
-	Plugin URI: https://github.com/alleyinteractive/fieldmanager-revisions
-	Description: Revision and Preview Postmeta
-	Version: 0.1
+	Plugin Name: Fieldmanager Revisions (Alpha)
+	Plugin URI: https://github.com/alleyinteractive/fieldmanager-revisions-alpha
+	Description: Revision and Preview Postmeta. NOTE: This will change and will not have long-term support.
+	Version: 0.0.1
 	Author: Alley Interactive
 	Author URI: http://www.alleyinteractive.com/
 */

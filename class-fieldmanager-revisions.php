@@ -38,10 +38,10 @@ class Fieldmanager_Revisions {
 	 * @return void
 	 */
 	public function __construct( $meta_fields, $post_type ) {
-		if ( is_admin() ) {
-			$this->post_type = $post_type;
-			$this->meta_fields = $meta_fields;
+		$this->post_type = $post_type;
+		$this->meta_fields = $meta_fields;
 
+		if ( is_admin() ) {
 			add_filter( 'wp_save_post_revision_check_for_changes', array( $this, 'bypass_change_check' ), 20, 3 );
 
 			add_action( '_wp_put_post_revision', array( $this, 'save_revision_post_meta' ), 20 );
@@ -52,6 +52,11 @@ class Fieldmanager_Revisions {
 
 			add_action( 'admin_action_editpost', array( $this, 'set_preview_fields' ) );
 		}
+
+		add_filter( 'the_preview', function( $post ) {
+			add_filter( 'get_post_metadata', array( $this, 'use_revision_meta' ), 10, 4 );
+			return $post;
+		} );
 
 		if ( ! self::$global_hooks_set ) {
 			add_filter( '_wp_post_revision_field_' . $this->revision_meta_key, array( $this, 'revision_meta_field' ), 10, 3 );
@@ -199,4 +204,36 @@ class Fieldmanager_Revisions {
 			$_POST[ $this->revision_meta_key ] = $this->to_json( $meta );
 		}
 	}
+
+	function use_revision_meta( $return, $object_id, $meta_key, $single ) {
+		// If the value has already been manipualted, abort
+		if ( null !== $return ) {
+			return $return;
+		}
+
+		// Make sure that this class should handle this meta key
+		if ( ! isset( $this->meta_fields[ $meta_key ] ) ) {
+			return $return;
+		}
+
+		// Make sure this isn't an autosave
+		if ( wp_is_post_autosave( $object_id ) ) {
+			return $return;
+		}
+
+		// Make sure that the post type is for this object
+		if ( $this->post_type != get_post_type( $object_id ) ) {
+			return $return;
+		}
+
+		// Get the latest autosave
+		$preview = wp_get_post_autosave( $object_id );
+		if ( ! is_object( $preview ) ) {
+			return $return;
+		}
+
+		// With the autosave in-hand, get the metadata using that ID
+		return get_metadata( 'post', $preview->ID, $meta_key, $single );
+	}
+
 }
