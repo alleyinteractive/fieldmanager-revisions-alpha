@@ -25,9 +25,11 @@ class Fieldmanager_Revisions {
 
 
 	/**
-	 * Post meta fields are merged and stored as JSON for the revision diffing system.
-	 * @var string
+	 * Post meta fields are merged and stored as JSON for the revision diffing
+	 * system.
+	 *
 	 * @access protected
+	 * @var string
 	 */
 	protected $revision_meta_key = '_revision_meta';
 
@@ -46,11 +48,10 @@ class Fieldmanager_Revisions {
 
 			add_action( '_wp_put_post_revision', array( $this, 'save_revision_post_meta' ), 20 );
 			add_action( 'post_updated', array( $this, 'save_revision_post_meta' ), 20 );
+
 			add_action( 'save_post', array( $this, 'action__save_post' ) );
 
 			add_action( 'wp_restore_post_revision', array( $this, 'restore_revision' ), 20, 2 );
-
-			add_action( 'admin_action_editpost', array( $this, 'set_preview_fields' ) );
 		}
 
 		add_filter( 'the_preview', function( $post ) {
@@ -111,7 +112,8 @@ class Fieldmanager_Revisions {
 
 
 	/**
-	 * This fires on save_post to store the revision_meta for diffing and autosaves.
+	 * This fires on save_post to store the revision_meta for diffing and
+	 * autosaves.
 	 *
 	 * @param  int $post_id Post ID
 	 * @return void
@@ -171,40 +173,18 @@ class Fieldmanager_Revisions {
 	}
 
 	/**
-	 * Since our post meta is not POSTed, previews where the meta changed don't
-	 * register as being modified, therefore the autosave or revision doesn't
-	 * save. This method checks to see if we're previewing, and sets that POST
-	 * data so changes are recognized.
+	 * Intercept `get_post_meta()` calls to use the revisioned meta instead of
+	 * the original post's meta, when appropriate.
 	 *
-	 * @return void
+	 * @see get_post_meta()
+	 *
+	 * @param  mixed $return The current return value. Unless something else is
+	 *                       intervening, this should be `null`.
+	 * @param  int $object_id {@see get_post_meta()}
+	 * @param  string $meta_key {@see get_post_meta()}
+	 * @param  bool $single {@see get_post_meta()}
+	 * @return mixed {@see get_post_meta()}
 	 */
-	public function set_preview_fields() {
-		// Check if this is our post type
-		if ( empty( $_POST['post_type'] ) || $this->post_type != $_POST['post_type'] ) {
-			return;
-		}
-
-		// Make sure we're trying to preview
-		if ( empty( $_POST['wp-preview'] ) || $_POST['wp-preview'] != 'dopreview' ) {
-			return;
-		}
-
-		global $post_id;
-		$meta = array();
-		foreach ( $this->meta_fields as $key => $label ) {
-			if ( isset( $_POST[ $key ] ) ) {
-				$value = _fieldmanager_sanitize_deep( $_POST[ $key ] );
-				$meta[ $key ] = $value;
-			} elseif ( $value = get_post_meta( $post_id, $key, true ) ) {
-				$meta[ $key ] = $value;
-			}
-		}
-
-		if ( ! empty( $meta ) && ! isset( $_POST[ $this->revision_meta_key ] ) ) {
-			$_POST[ $this->revision_meta_key ] = $this->to_json( $meta );
-		}
-	}
-
 	function use_revision_meta( $return, $object_id, $meta_key, $single ) {
 		// If the value has already been manipualted, abort
 		if ( null !== $return ) {
