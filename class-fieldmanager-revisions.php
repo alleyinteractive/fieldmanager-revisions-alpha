@@ -182,10 +182,11 @@ class Fieldmanager_Revisions {
 	 *                       intervening, this should be `null`.
 	 * @param  int $object_id {@see get_post_meta()}
 	 * @param  string $meta_key {@see get_post_meta()}
-	 * @param  bool $single {@see get_post_meta()}
-	 * @return mixed {@see get_post_meta()}
+	 * @param  bool $single This is ultimately ignored.
+	 * @return array The value of $single is ignored, so this will always return
+	 *               an array.
 	 */
-	function use_revision_meta( $return, $object_id, $meta_key, $single ) {
+	public function use_revision_meta( $return, $object_id, $meta_key, $single ) {
 		// If the value has already been manipualted, abort
 		if ( null !== $return ) {
 			return $return;
@@ -212,8 +213,12 @@ class Fieldmanager_Revisions {
 			return $return;
 		}
 
-		// With the autosave in-hand, get the metadata using that ID
-		return get_metadata( 'post', $preview->ID, $meta_key, $single );
+		// With the autosave in-hand, get the metadata using that ID. Note that
+		// we're ignoring $single here, because the rest of get_post_meta() will
+		// handle that for us.
+		$result = get_metadata( 'post', $preview->ID, $meta_key );
+
+		return $result;
 	}
 
 }
