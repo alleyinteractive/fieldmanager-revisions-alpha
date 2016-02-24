@@ -169,7 +169,7 @@ class Fieldmanager_Revisions {
 	 */
 	public function to_json( $value = '' ) {
 		$JSON_PRETTY_PRINT = defined( 'JSON_PRETTY_PRINT' ) ? JSON_PRETTY_PRINT : null;
-		return json_encode( $value, $JSON_PRETTY_PRINT );
+		return wp_json_encode( $value, $JSON_PRETTY_PRINT );
 	}
 
 	/**
