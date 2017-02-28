@@ -54,10 +54,7 @@ class Fieldmanager_Revisions {
 			add_action( 'wp_restore_post_revision', array( $this, 'restore_revision' ), 20, 2 );
 		}
 
-		add_filter( 'the_preview', function( $post ) {
-			add_filter( 'get_post_metadata', array( $this, 'use_revision_meta' ), 10, 4 );
-			return $post;
-		} );
+		add_filter( 'the_preview', array( $this, 'the_preview' ) );
 
 		if ( ! self::$global_hooks_set ) {
 			add_filter( '_wp_post_revision_field_' . $this->revision_meta_key, array( $this, 'revision_meta_field' ), 10, 3 );
@@ -65,7 +62,11 @@ class Fieldmanager_Revisions {
 			self::$global_hooks_set = true;
 		}
 	}
-
+	
+	public function the_preview( $post ) {
+		add_filter( 'get_post_metadata', array( $this, 'use_revision_meta' ), 10, 4 );
+		return $post;
+	}
 
 	/**
 	 * Restore previous metadata for revision
