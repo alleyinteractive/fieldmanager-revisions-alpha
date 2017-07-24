@@ -34,14 +34,49 @@ class Fieldmanager_Revisions {
 	protected $revision_meta_key = '_revision_meta';
 
 	/**
-	 * Constructor.
+	 * Build the object instance.
 	 *
-	 * @access public
-	 * @return void
+	 * @param array $meta_fields {
+	 *     Meta fields to revision. The array's index key is used as the meta
+	 *     key, e.g. `'my_meta_key' => 'My Field'`. The array value can either
+	 *     be a string or an array. If a string, that becomes the label. If you
+	 *     need to set the POST request key, you would instead pass an array
+	 *     with `$label` and `$request_key` params (see below for details).
+	 *
+	 *
+	 *     @type string       $label       Field label, for diffing purposes.
+	 *     @type string|array $request_key Optional. $_POST[ $request_key ] is
+	 *                                     used when saving data. If your FM
+	 *                                     field uses `serialize_data => false`,
+	 *                                     you need to override this. You can
+	 *                                     define hierarchy by passing an array,
+	 *                                     e.g. `[ 'foo', 'bar' ]` converts to
+	 *                                     `$_POST['foo']['bar']`. If absent,
+	 *                                     the array index will be used.
+	 * }
+	 * @param string $post_type Post type for this instance.
 	 */
 	public function __construct( $meta_fields, $post_type ) {
 		$this->post_type = $post_type;
-		$this->meta_fields = $meta_fields;
+
+		foreach ( $meta_fields as $key => $args ) {
+			if ( ! is_array( $args ) ) {
+				$args = array(
+					'label' => $args,
+					'request_key' => array( $key ),
+				);
+			} else {
+				if ( ! array_key_exists( 'label', $args ) ) {
+					$args['label'] = $key;
+				}
+				if ( empty( $args['request_key'] ) ) {
+					$args['request_key'] = array( $key );
+				}
+			}
+			// Ensure the request key is an array.
+			$args['request_key'] = (array) $args['request_key'];
+			$this->meta_fields[ $key ] = $args;
+		}
 
 		if ( is_admin() ) {
 			add_filter( 'wp_save_post_revision_check_for_changes', array( $this, 'bypass_change_check' ), 20, 3 );
@@ -62,9 +97,19 @@ class Fieldmanager_Revisions {
 			self::$global_hooks_set = true;
 		}
 	}
-	
+
+	/**
+	 * Only filter metadata when running a preview. This method ensures that
+	 * this plugin doesn't impact normal site performance.
+	 *
+	 * @param  \WP_Post $post Post object.
+	 * @return \WP_Post
+	 */
 	public function the_preview( $post ) {
-		add_filter( 'get_post_metadata', array( $this, 'use_revision_meta' ), 10, 4 );
+		// Only add the filter if this instance matches the post's post type.
+		if ( $this->post_type === $post->post_type ) {
+			add_filter( 'get_post_metadata', array( $this, 'use_revision_meta' ), 10, 4 );
+		}
 		return $post;
 	}
 
@@ -89,18 +134,40 @@ class Fieldmanager_Revisions {
 	}
 
 	/**
-	 * Save the post meta options field for revisions
+	 * Recursively crawl an array to get a nested array value.
+	 *
+	 * Given an array like `[ 'foo' => [ 'bar' => [ 'bat' => 37 ] ] ]`, if you
+	 * want to get the value `37` out of it, you would call
+	 * `$this->get_nested_array_value( $arr, [ 'foo', 'bar', 'bat' ] )`. This is
+	 * a helper for crawling $_POST for nested meta keys.
+	 *
+	 * @param  array $arr  Array to crawl through.
+	 * @param  array $keys Array of keys to crawl.
+	 * @return mixed       Nested value if found, null if not.
+	 */
+	protected function get_nested_array_value( $arr, $keys ) {
+		$key = ! empty( $keys ) ? array_shift( $keys ) : null;
+		if ( $key && array_key_exists( $key, $arr ) ) {
+			return ! empty( $keys ) ? $this->get_nested_array_value( $arr[ $key ], $keys ) : $arr[ $key ];
+		}
+		return null;
+	}
+
+	/**
+	 * Save the post meta options field for revisions.
 	 */
 	public function save_revision_post_meta( $post_id ) {
 		$parent_id = wp_is_post_revision( $post_id );
 		if ( $parent_id && get_post_type( $parent_id ) == $this->post_type ) {
 			$meta = array();
-			foreach ( $this->meta_fields as $key => $label ) {
-				if ( isset( $_POST[ $key ] ) ) {
-					$value = _fieldmanager_sanitize_deep( $_POST[ $key ] );
+			foreach ( $this->meta_fields as $key => $args ) {
+				$raw_request_value = $this->get_nested_array_value( $_POST, $args['request_key'] );
+				if ( isset( $raw_request_value ) ) {
+					$value = _fieldmanager_sanitize_deep( $raw_request_value );
 					$meta[ $key ] = $value;
 					update_metadata( 'post', $post_id, $key, $value );
-				} elseif ( $value = get_post_meta( $parent_id, $key, true ) ) {
+				} else {
+					$value = get_post_meta( $parent_id, $key, true );
 					$meta[ $key ] = $value;
 					update_metadata( 'post', $post_id, $key, $value );
 				}
@@ -111,25 +178,24 @@ class Fieldmanager_Revisions {
 		}
 	}
 
-
 	/**
 	 * This fires on save_post to store the revision_meta for diffing and
 	 * autosaves.
 	 *
 	 * @param  int $post_id Post ID
-	 * @return void
 	 */
 	public function action__save_post( $post_id ) {
-		if ( get_post_type( $post_id ) != $this->post_type || ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) ) {
+		if ( get_post_type( $post_id ) !== $this->post_type || ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) ) {
 			return;
 		}
 
 		$meta = array();
-		foreach ( $this->meta_fields as $key => $label ) {
-			if ( isset( $_POST[ $key ] ) ) {
-				$meta[ $key ] = _fieldmanager_sanitize_deep( $_POST[ $key ] );
-			} elseif ( $value = get_post_meta( $post_id, $key, true ) ) {
-				$meta[ $key ] = $value;
+		foreach ( $this->meta_fields as $key => $args ) {
+			$raw_request_value = $this->get_nested_array_value( $_POST, $args['request_key'] );
+			if ( isset( $raw_request_value ) ) {
+				$meta[ $key ] = _fieldmanager_sanitize_deep( $raw_request_value );
+			} else {
+				$meta[ $key ] = get_post_meta( $post_id, $key, true );
 			}
 		}
 		if ( ! empty( $meta ) ) {
@@ -204,7 +270,7 @@ class Fieldmanager_Revisions {
 		}
 
 		// Make sure that the post type is for this object
-		if ( $this->post_type != get_post_type( $object_id ) ) {
+		if ( $this->post_type !== get_post_type( $object_id ) ) {
 			return $return;
 		}
 
