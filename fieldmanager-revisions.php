@@ -61,7 +61,9 @@ function _fieldmanager_sanitize_deep( $struct ) {
 	if ( is_object( $struct ) ) {
 		$object = (array) $struct;
 	} elseif ( ! is_array( $struct ) ) {
-		return sanitize_text_field( $struct );
+		// This plugin doesn't know how data needs to be sanitized, so we have
+		// to assume it has HTML markup and sanitize it that way.
+		return wp_kses_post( $struct );
 	}
 
 	$new_struct = array();
