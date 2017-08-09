@@ -122,12 +122,20 @@ class Fieldmanager_Revisions {
 			$meta_fields[] = $this->revision_meta_key;
 			$meta_fields = array_unique( $meta_fields );
 			foreach ( $meta_fields as $key ) {
-				$meta = get_metadata( 'post', $revision_id, $key, true );
+				$meta = get_metadata( 'post', $revision_id, $key );
 
-				if ( false === $meta ) {
-					delete_post_meta( $post_id, $key );
+				if ( ! is_array( $meta ) ) {
+					// This case should never happen, but it is theoretically possible.
+				} elseif ( empty( $meta ) ) {
+					// Do nothing. It's not safe to delete meta if the revision has
+					// nothing. Possible situations that would cause that:
+					// - A post was updated outside of the admin, e.g. CLI script
+					// - A revision existed before the key was set to be revisioned
 				} else {
-					update_post_meta( $post_id, $key, $meta );
+					delete_post_meta( $post_id, $key );
+					foreach ( $meta as $value ) {
+						add_post_meta( $post_id, $key, $value );
+					}
 				}
 			}
 		}
@@ -216,7 +224,7 @@ class Fieldmanager_Revisions {
 	/**
 	 * The names of meta fields
 	 */
-	function revision_meta_fields( $fields ) {
+	public function revision_meta_fields( $fields ) {
 		$fields[ $this->revision_meta_key ] = __( 'Meta Fields', 'fieldmanager-revisions' );
 		return $fields;
 	}
